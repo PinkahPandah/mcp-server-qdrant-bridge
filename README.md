@@ -97,6 +97,7 @@ Supported transport protocols:
 
 - `stdio` (default): Standard input/output transport, might only be used by local MCP clients
 - `sse`: Server-Sent Events transport, perfect for remote clients
+- `streamable-http`: Streamable HTTP transport, perfect for remote clients, more recent than SSE
 
 The default transport is `stdio` if not specified.
 
@@ -275,7 +276,7 @@ The MCP server can be run in development mode using the `mcp dev` command. This 
 inspector in your browser.
 
 ```shell
-COLLECTION_NAME=mcp-dev mcp dev src/mcp_server_qdrant/server.py
+COLLECTION_NAME=mcp-dev fastmcp dev src/mcp_server_qdrant/server.py
 ```
 
 ### Using with VS Code
@@ -467,7 +468,7 @@ your browser to use the inspector.
 
 ```shell
 QDRANT_URL=":memory:" COLLECTION_NAME="test" \
-mcp dev src/mcp_server_qdrant/server.py
+fastmcp dev src/mcp_server_qdrant/server.py
 ```
 
 Once started, open your browser to http://localhost:5173 to access the inspector interface.
