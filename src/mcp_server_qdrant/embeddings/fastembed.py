@@ -1,5 +1,4 @@
 import asyncio
-from typing import List
 
 from fastembed import TextEmbedding
 from fastembed.common.model_description import DenseModelDescription
@@ -17,7 +16,7 @@ class FastEmbedProvider(EmbeddingProvider):
         self.model_name = model_name
         self.embedding_model = TextEmbedding(model_name)
 
-    async def embed_documents(self, documents: List[str]) -> List[List[float]]:
+    async def embed_documents(self, documents: list[str]) -> list[list[float]]:
         """Embed a list of documents into vectors."""
         # Run in a thread pool since FastEmbed is synchronous
         loop = asyncio.get_event_loop()
@@ -26,7 +25,7 @@ class FastEmbedProvider(EmbeddingProvider):
         )
         return [embedding.tolist() for embedding in embeddings]
 
-    async def embed_query(self, query: str) -> List[float]:
+    async def embed_query(self, query: str) -> list[float]:
         """Embed a query into a vector."""
         # Run in a thread pool since FastEmbed is synchronous
         loop = asyncio.get_event_loop()

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Annotated, Any, List, Optional
+from typing import Annotated, Any
 
 from fastmcp import Context, FastMCP
 from pydantic import Field
@@ -76,7 +76,7 @@ class QdrantMCPServer(FastMCP):
             # If we set it to be optional, some of the MCP clients, like Cursor, cannot
             # handle the optional parameter correctly.
             metadata: Annotated[
-                Optional[Metadata],
+                Metadata | None,
                 Field(
                     description="Extra metadata stored along with memorised information. Any json is accepted."
                 ),
@@ -106,14 +106,15 @@ class QdrantMCPServer(FastMCP):
             collection_name: Annotated[
                 str, Field(description="The collection to search in")
             ],
-            query_filter: Optional[ArbitraryFilter] = None,
-        ) -> List[str]:
+            query_filter: ArbitraryFilter | None = None,
+        ) -> list[str]:
             """
             Find memories in Qdrant.
             :param ctx: The context for the request.
             :param query: The query to use for the search.
             :param collection_name: The name of the collection to search in, optional. If not provided,
                                     the default collection is used.
+            :param query_filter: The filter to apply to the query.
             :return: A list of entries found.
             """
 
@@ -123,10 +124,6 @@ class QdrantMCPServer(FastMCP):
             query_filter = models.Filter(**query_filter) if query_filter else None
 
             await ctx.debug(f"Finding results for query {query}")
-            if collection_name:
-                await ctx.debug(
-                    f"Overriding the collection name with {collection_name}"
-                )
 
             entries = await self.qdrant_connector.search(
                 query,

@@ -1,6 +1,6 @@
-from typing import Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings
 
 from mcp_server_qdrant.embeddings.types import EmbeddingProviderType
@@ -56,7 +56,7 @@ class FilterableField(BaseModel):
     field_type: Literal["keyword", "integer", "float", "boolean"] = Field(
         description="The type of the field"
     )
-    condition: Optional[Literal["==", "!=", ">", ">=", "<", "<=", "any", "except"]] = (
+    condition: Literal["==", "!=", ">", ">=", "<", "<=", "any", "except"] | None = (
         Field(
             default=None,
             description=(
@@ -76,18 +76,16 @@ class QdrantSettings(BaseSettings):
     Configuration for the Qdrant connector.
     """
 
-    location: Optional[str] = Field(default=None, validation_alias="QDRANT_URL")
-    api_key: Optional[str] = Field(default=None, validation_alias="QDRANT_API_KEY")
-    collection_name: Optional[str] = Field(
+    location: str | None = Field(default=None, validation_alias="QDRANT_URL")
+    api_key: str | None = Field(default=None, validation_alias="QDRANT_API_KEY")
+    collection_name: str | None = Field(
         default=None, validation_alias="COLLECTION_NAME"
     )
-    local_path: Optional[str] = Field(
-        default=None, validation_alias="QDRANT_LOCAL_PATH"
-    )
+    local_path: str | None = Field(default=None, validation_alias="QDRANT_LOCAL_PATH")
     search_limit: int = Field(default=10, validation_alias="QDRANT_SEARCH_LIMIT")
     read_only: bool = Field(default=False, validation_alias="QDRANT_READ_ONLY")
 
-    filterable_fields: Optional[list[FilterableField]] = Field(default=None)
+    filterable_fields: list[FilterableField] | None = Field(default=None)
 
     allow_arbitrary_filter: bool = Field(
         default=False, validation_alias="QDRANT_ALLOW_ARBITRARY_FILTER"
@@ -106,3 +104,12 @@ class QdrantSettings(BaseSettings):
             for field in self.filterable_fields
             if field.condition is not None
         }
+
+    @model_validator(mode="after")
+    def check_local_path_conflict(self) -> "QdrantSettings":
+        if self.local_path:
+            if self.location is not None or self.api_key is not None:
+                raise ValueError(
+                    "If 'local_path' is set, 'location' and 'api_key' must be None."
+                )
+        return self

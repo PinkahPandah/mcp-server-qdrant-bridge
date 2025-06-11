@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
 
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient, models
@@ -10,9 +10,8 @@ from mcp_server_qdrant.settings import METADATA_PATH
 
 logger = logging.getLogger(__name__)
 
-Metadata = Dict[str, Any]
-
-ArbitraryFilter = Dict[str, Any]
+Metadata = dict[str, Any]
+ArbitraryFilter = dict[str, Any]
 
 
 class Entry(BaseModel):
@@ -21,7 +20,7 @@ class Entry(BaseModel):
     """
 
     content: str
-    metadata: Optional[Metadata] = None
+    metadata: Metadata | None = None
 
 
 class QdrantConnector:
@@ -37,12 +36,12 @@ class QdrantConnector:
 
     def __init__(
         self,
-        qdrant_url: Optional[str],
-        qdrant_api_key: Optional[str],
-        collection_name: Optional[str],
+        qdrant_url: str | None,
+        qdrant_api_key: str | None,
+        collection_name: str | None,
         embedding_provider: EmbeddingProvider,
-        qdrant_local_path: Optional[str] = None,
-        field_indexes: Optional[dict[str, models.PayloadSchemaType]] = None,
+        qdrant_local_path: str | None = None,
+        field_indexes: dict[str, models.PayloadSchemaType] | None = None,
     ):
         self._qdrant_url = qdrant_url.rstrip("/") if qdrant_url else None
         self._qdrant_api_key = qdrant_api_key
@@ -61,7 +60,7 @@ class QdrantConnector:
         response = await self._client.get_collections()
         return [collection.name for collection in response.collections]
 
-    async def store(self, entry: Entry, *, collection_name: Optional[str] = None):
+    async def store(self, entry: Entry, *, collection_name: str | None = None):
         """
         Store some information in the Qdrant collection, along with the specified metadata.
         :param entry: The entry to store in the Qdrant collection.
@@ -95,9 +94,9 @@ class QdrantConnector:
         self,
         query: str,
         *,
-        collection_name: Optional[str] = None,
+        collection_name: str | None = None,
         limit: int = 10,
-        query_filter: Optional[models.Filter] = None,
+        query_filter: models.Filter | None = None,
     ) -> list[Entry]:
         """
         Find points in the Qdrant collection. If there are no entries found, an empty list is returned.
@@ -105,6 +104,8 @@ class QdrantConnector:
         :param collection_name: The name of the collection to search in, optional. If not provided,
                                 the default collection is used.
         :param limit: The maximum number of entries to return.
+        :param query_filter: The filter to apply to the query, if any.
+
         :return: A list of entries found.
         """
         collection_name = collection_name or self._default_collection_name
