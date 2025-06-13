@@ -160,7 +160,7 @@ class QdrantMCPServer(FastMCP):
                 store_foo, {"collection_name": self.qdrant_settings.collection_name}
             )
 
-        self.add_tool(
+        self.tool(
             find_foo,
             name="qdrant-find",
             description=self.tool_settings.tool_find_description,
@@ -168,7 +168,7 @@ class QdrantMCPServer(FastMCP):
 
         if not self.qdrant_settings.read_only:
             # Those methods can modify the database
-            self.add_tool(
+            self.tool(
                 store_foo,
                 name="qdrant-store",
                 description=self.tool_settings.tool_store_description,
