@@ -85,6 +85,34 @@ class QdrantMCPServer(FastMCP):
         entry_metadata = json.dumps(entry.metadata) if entry.metadata else ""
         return f"<entry><content>{entry.content}</content><metadata>{entry_metadata}</metadata></entry>"
 
+    def format_entry_minimal(self, entry: Entry) -> str:
+        """
+        Return only metadata without chunk content for token-efficient responses.
+        Extracts commonly queried factual fields for direct lookup queries.
+        """
+        if not entry.metadata:
+            return "<entry><metadata>No metadata available</metadata></entry>"
+
+        # Extract commonly queried factual fields
+        factual_fields = {
+            "ip_addresses": entry.metadata.get("ip_addresses"),
+            "hostnames": entry.metadata.get("hostnames"),
+            "ports": entry.metadata.get("ports"),
+            "domains": entry.metadata.get("domains"),
+            "urls": entry.metadata.get("urls"),
+            "service_name": entry.metadata.get("service_name"),
+            "stack_name": entry.metadata.get("stack_name"),
+            "file_name": entry.metadata.get("file_name"),
+            "source": entry.metadata.get("source"),
+            "doc_type": entry.metadata.get("doc_type"),
+        }
+
+        # Filter out None values
+        factual_fields = {k: v for k, v in factual_fields.items() if v}
+
+        metadata_json = json.dumps(factual_fields, indent=2)
+        return f"<entry><metadata>{metadata_json}</metadata></entry>"
+
     def setup_tools(self):
         """
         Register the tools in the server.
@@ -130,6 +158,12 @@ class QdrantMCPServer(FastMCP):
             collection_name: Annotated[
                 str, Field(description="The collection to search in")
             ],
+            mode: Annotated[
+                str,
+                Field(
+                    description="Response mode: 'full' (default) returns complete chunks with metadata, 'minimal' returns only metadata for token-efficient factual lookups"
+                ),
+            ] = "full",
             query_filter: ArbitraryFilter | None = None,
         ) -> list[str] | None:
             """
@@ -138,12 +172,14 @@ class QdrantMCPServer(FastMCP):
             :param query: The query to use for the search.
             :param collection_name: The name of the collection to search in, optional. If not provided,
                                     the default collection is used.
+            :param mode: Response mode - 'full' for complete chunks, 'minimal' for metadata only.
             :param query_filter: The filter to apply to the query.
             :return: A list of entries found or None.
             """
 
-            # Log query_filter
+            # Log query_filter and mode
             await ctx.debug(f"Query filter: {query_filter}")
+            await ctx.debug(f"Response mode: {mode}")
 
             query_filter = models.Filter(**query_filter) if query_filter else None
 
@@ -161,7 +197,10 @@ class QdrantMCPServer(FastMCP):
                 f"Results for the query '{query}'",
             ]
             for entry in entries:
-                content.append(self.format_entry(entry))
+                if mode == "minimal":
+                    content.append(self.format_entry_minimal(entry))
+                else:
+                    content.append(self.format_entry(entry))
             return content
 
         find_foo = find
