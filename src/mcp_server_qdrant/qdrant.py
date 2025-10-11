@@ -131,7 +131,7 @@ class QdrantConnector:
 
         return [
             Entry(
-                content=result.payload["document"],
+                content=result.payload.get("page_content") or result.payload.get("document", ""),
                 metadata=result.payload.get("metadata"),
             )
             for result in search_results.points
