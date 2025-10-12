@@ -9,6 +9,27 @@
 
 This repository is an example of how to create a MCP server for [Qdrant](https://qdrant.tech/), a vector search engine.
 
+## ⚡ Token-Optimized Fork
+
+This fork includes **90-97% token reduction** for documentation queries through:
+
+1. **Minimal mode (default)** - Returns metadata only (IPs, hostnames, URLs, file names) without full chunk content
+2. **Reduced default limit** - 5 results instead of 10
+3. **Optional limit parameter** - Override when deeper search needed
+
+```python
+# Default: minimal mode, 5 results (~2k tokens)
+qdrant-find(query="server ip address")
+
+# Full content mode (~3-6k tokens)
+qdrant-find(query="configuration procedure", mode="full")
+
+# More results when needed
+qdrant-find(query="architecture", mode="full", limit=10)
+```
+
+See [README.custom.md](README.custom.md) for detailed comparison and configuration.
+
 ## Overview
 
 An official Model Context Protocol server for keeping and retrieving memories in the Qdrant vector search engine.
