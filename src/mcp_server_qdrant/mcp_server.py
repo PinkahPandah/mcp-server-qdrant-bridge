@@ -161,9 +161,15 @@ class QdrantMCPServer(FastMCP):
             mode: Annotated[
                 str,
                 Field(
-                    description="Response mode: 'full' (default) returns complete chunks with metadata, 'minimal' returns only metadata for token-efficient factual lookups"
+                    description="Response mode: 'full' returns complete chunks with metadata, 'minimal' (default) returns only metadata for token-efficient factual lookups"
                 ),
-            ] = "full",
+            ] = "minimal",
+            limit: Annotated[
+                int | None,
+                Field(
+                    description="Maximum number of results to return. If not specified, uses default (5). Increase for deeper searches."
+                ),
+            ] = None,
             query_filter: ArbitraryFilter | None = None,
         ) -> list[str] | None:
             """
@@ -173,13 +179,18 @@ class QdrantMCPServer(FastMCP):
             :param collection_name: The name of the collection to search in, optional. If not provided,
                                     the default collection is used.
             :param mode: Response mode - 'full' for complete chunks, 'minimal' for metadata only.
+            :param limit: Maximum number of results to return. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
             :return: A list of entries found or None.
             """
 
-            # Log query_filter and mode
+            # Use provided limit or fall back to default
+            search_limit = limit if limit is not None else self.qdrant_settings.search_limit
+
+            # Log query_filter, mode, and limit
             await ctx.debug(f"Query filter: {query_filter}")
             await ctx.debug(f"Response mode: {mode}")
+            await ctx.debug(f"Search limit: {search_limit}")
 
             query_filter = models.Filter(**query_filter) if query_filter else None
 
@@ -188,7 +199,7 @@ class QdrantMCPServer(FastMCP):
             entries = await self.qdrant_connector.search(
                 query,
                 collection_name=collection_name,
-                limit=self.qdrant_settings.search_limit,
+                limit=search_limit,
                 query_filter=query_filter,
             )
             if not entries:

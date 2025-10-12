@@ -95,7 +95,7 @@ class QdrantSettings(BaseSettings):
         default=None, validation_alias="COLLECTION_NAME"
     )
     local_path: str | None = Field(default=None, validation_alias="QDRANT_LOCAL_PATH")
-    search_limit: int = Field(default=10, validation_alias="QDRANT_SEARCH_LIMIT")
+    search_limit: int = Field(default=5, validation_alias="QDRANT_SEARCH_LIMIT")
     read_only: bool = Field(default=False, validation_alias="QDRANT_READ_ONLY")
 
     filterable_fields: list[FilterableField] | None = Field(default=None)
