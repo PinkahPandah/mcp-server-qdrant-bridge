@@ -14,6 +14,12 @@ DEFAULT_TOOL_FIND_DESCRIPTION = (
     " - Access memories for further analysis \n"
     " - Get some personal information about the user"
 )
+DEFAULT_TOOL_DELETE_DESCRIPTION = (
+    "Delete points from Qdrant by point IDs or metadata filters. "
+    "ID-based deletion (via point_ids parameter) is preferred as it's more reliable and accurate. "
+    "Use filter-based deletion (via query_filter parameter) when you don't have specific IDs. "
+    "Provide either point_ids OR query_filter, not both."
+)
 
 METADATA_PATH = "metadata"
 
@@ -31,7 +37,10 @@ class ToolSettings(BaseSettings):
         default=DEFAULT_TOOL_FIND_DESCRIPTION,
         validation_alias="TOOL_FIND_DESCRIPTION",
     )
-
+    tool_delete_description: str = Field(
+        default=DEFAULT_TOOL_DELETE_DESCRIPTION,
+        validation_alias="TOOL_DELETE_DESCRIPTION",
+    )
 
 class EmbeddingProviderSettings(BaseSettings):
     """

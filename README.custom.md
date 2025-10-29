@@ -15,6 +15,12 @@ Changed default from 10 → 5 results.
 ### 3. Optional Limit Parameter
 Override default when deeper search needed.
 
+### 4. Point IDs in Results
+All `qdrant-find` results now include point IDs (`<id>uuid</id>`) for precise deletion operations.
+
+### 5. Delete Tool
+New `qdrant-delete` tool for removing points by ID (preferred) or filter conditions.
+
 ## Usage
 
 ```python
@@ -26,6 +32,12 @@ qdrant-find(query="configuration procedure", mode="full")
 
 # More results when needed
 qdrant-find(query="architecture", mode="full", limit=10)
+
+# Delete specific points by ID (recommended - reliable)
+qdrant-delete(collection_name="my-collection", point_ids=["uuid-1", "uuid-2"])
+
+# Delete by filter (when IDs unknown)
+qdrant-delete(collection_name="my-collection", query_filter={"must": [{"key": "status", "match": {"value": "expired"}}]})
 ```
 
 ## Token Comparison

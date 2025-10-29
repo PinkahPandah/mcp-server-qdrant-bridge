@@ -83,15 +83,18 @@ class QdrantMCPServer(FastMCP):
         Feel free to override this method in your subclass to customize the format of the entry.
         """
         entry_metadata = json.dumps(entry.metadata) if entry.metadata else ""
-        return f"<entry><content>{entry.content}</content><metadata>{entry_metadata}</metadata></entry>"
+        entry_id = entry.id if entry.id else "unknown"
+        return f"<entry><id>{entry_id}</id><content>{entry.content}</content><metadata>{entry_metadata}</metadata></entry>"
 
     def format_entry_minimal(self, entry: Entry) -> str:
         """
         Return only metadata without chunk content for token-efficient responses.
         Extracts commonly queried factual fields for direct lookup queries.
         """
+        entry_id = entry.id if entry.id else "unknown"
+        
         if not entry.metadata:
-            return "<entry><metadata>No metadata available</metadata></entry>"
+            return f"<entry><id>{entry_id}</id><metadata>No metadata available</metadata></entry>"
 
         # Extract commonly queried factual fields
         factual_fields = {
@@ -111,7 +114,7 @@ class QdrantMCPServer(FastMCP):
         factual_fields = {k: v for k, v in factual_fields.items() if v}
 
         metadata_json = json.dumps(factual_fields, indent=2)
-        return f"<entry><metadata>{metadata_json}</metadata></entry>"
+        return f"<entry><id>{entry_id}</id><metadata>{metadata_json}</metadata></entry>"
 
     def setup_tools(self):
         """
@@ -214,8 +217,49 @@ class QdrantMCPServer(FastMCP):
                     content.append(self.format_entry(entry))
             return content
 
+        async def delete(
+            ctx: Context,
+            collection_name: Annotated[
+                str, Field(description="The collection to delete from")
+            ],
+            query_filter: ArbitraryFilter | None = None,
+            point_ids: Annotated[
+                list[str] | None,
+                Field(description="List of point IDs (UUIDs) to delete. Preferred method for reliable deletion.")
+            ] = None,
+        ) -> str:
+            """
+            Delete points from Qdrant by IDs or metadata filters.
+            
+            ID-based deletion is preferred as it's more reliable. Provide either point_ids OR query_filter, not both.
+            
+            :param ctx: The context for the request.
+            :param collection_name: The name of the collection to delete from.
+            :param query_filter: Filter conditions to identify points to delete (optional).
+            :param point_ids: List of point IDs (UUIDs) to delete (optional, recommended).
+            :return: Confirmation message with operation details.
+            """
+            if point_ids is not None:
+                await ctx.debug(f"Deleting {len(point_ids)} points by ID: {point_ids[:3]}{'...' if len(point_ids) > 3 else ''}")
+                result = await self.qdrant_connector.delete(
+                    point_ids=point_ids,
+                    collection_name=collection_name
+                )
+            elif query_filter is not None:
+                await ctx.debug(f"Deleting points with filter: {query_filter}")
+                filter_obj = models.Filter(**query_filter)
+                result = await self.qdrant_connector.delete(
+                    filter_obj,
+                    collection_name=collection_name
+                )
+            else:
+                raise ValueError("Must provide either point_ids or query_filter")
+
+            return f"Delete operation completed for {collection_name}: status={result['status']}, operation_id={result.get('operation_id', 'N/A')}"
+
         find_foo = find
         store_foo = store
+        delete_foo = delete
 
         filterable_conditions = (
             self.qdrant_settings.filterable_fields_dict_with_conditions()
@@ -223,8 +267,10 @@ class QdrantMCPServer(FastMCP):
 
         if len(filterable_conditions) > 0:
             find_foo = wrap_filters(find_foo, filterable_conditions)
+            delete_foo = wrap_filters(delete_foo, filterable_conditions)
         elif not self.qdrant_settings.allow_arbitrary_filter:
             find_foo = make_partial_function(find_foo, {"query_filter": None})
+            delete_foo = make_partial_function(delete_foo, {"query_filter": None})
 
         if self.qdrant_settings.collection_name:
             find_foo = make_partial_function(
@@ -232,6 +278,9 @@ class QdrantMCPServer(FastMCP):
             )
             store_foo = make_partial_function(
                 store_foo, {"collection_name": self.qdrant_settings.collection_name}
+            )
+            delete_foo = make_partial_function(
+                delete_foo, {"collection_name": self.qdrant_settings.collection_name}
             )
 
         self.tool(
@@ -246,4 +295,9 @@ class QdrantMCPServer(FastMCP):
                 store_foo,
                 name="qdrant-store",
                 description=self.tool_settings.tool_store_description,
+            )
+            self.tool(
+                delete_foo,
+                name="qdrant-delete",
+                description=self.tool_settings.tool_delete_description,
             )

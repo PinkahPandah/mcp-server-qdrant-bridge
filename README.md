@@ -16,6 +16,8 @@ This fork includes **90-97% token reduction** for documentation queries through:
 1. **Minimal mode (default)** - Returns metadata only (IPs, hostnames, URLs, file names) without full chunk content
 2. **Reduced default limit** - 5 results instead of 10
 3. **Optional limit parameter** - Override when deeper search needed
+4. **Point IDs in results** - All search results include point IDs for precise deletion operations
+5. **Delete tool** - Remove points by ID or filter for collection maintenance
 
 ```python
 # Default: minimal mode, 5 results (~2k tokens)
@@ -26,6 +28,12 @@ qdrant-find(query="configuration procedure", mode="full")
 
 # More results when needed
 qdrant-find(query="architecture", mode="full", limit=10)
+
+# Delete specific points by ID (recommended)
+qdrant-delete(collection_name="my-collection", point_ids=["uuid-1", "uuid-2"])
+
+# Delete by filter
+qdrant-delete(collection_name="my-collection", query_filter={"must": [{"key": "status", "match": {"value": "expired"}}]})
 ```
 
 See [README.custom.md](README.custom.md) for detailed comparison and configuration.
@@ -53,7 +61,18 @@ It acts as a semantic memory layer on top of the Qdrant database.
      - `query` (string): Query to use for searching
      - `collection_name` (string): Name of the collection to store the information in. This field is required if there are no default collection name.
                                    If there is a default collection name, this field is not enabled.
-   - Returns: Information stored in the Qdrant database as separate messages
+     - `mode` (string, optional): Response mode - "minimal" (default, metadata only) or "full" (complete content)
+     - `limit` (integer, optional): Maximum number of results to return (default: 5)
+   - Returns: Information stored in the Qdrant database as separate messages, including point IDs for each result
+3. `qdrant-delete`
+   - Delete points from the Qdrant database by IDs or filter conditions
+   - Input:
+     - `collection_name` (string): Name of the collection to delete from. This field is required if there are no default collection name.
+                                   If there is a default collection name, this field is not enabled.
+     - `point_ids` (array of strings, optional): List of point IDs (UUIDs) to delete. Preferred method for reliable deletion.
+     - `query_filter` (JSON, optional): Filter conditions to identify points to delete
+   - Returns: Confirmation message with operation status
+   - Note: Provide either `point_ids` OR `query_filter`, not both
 
 ## Environment Variables
 
@@ -69,6 +88,7 @@ The configuration of the server is done using environment variables:
 | `EMBEDDING_MODEL`        | Name of the embedding model to use                                  | `sentence-transformers/all-MiniLM-L6-v2`                          |
 | `TOOL_STORE_DESCRIPTION` | Custom description for the store tool                               | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
 | `TOOL_FIND_DESCRIPTION`  | Custom description for the find tool                                | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
+| `TOOL_DELETE_DESCRIPTION` | Custom description for the delete tool                             | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
 
 Note: You cannot provide both `QDRANT_URL` and `QDRANT_LOCAL_PATH` at the same time.
 

@@ -21,6 +21,7 @@ class Entry(BaseModel):
 
     content: str
     metadata: Metadata | None = None
+    id: str | None = None  # Qdrant point ID (UUID)
 
 
 class QdrantConnector:
@@ -133,9 +134,58 @@ class QdrantConnector:
             Entry(
                 content=result.payload.get("page_content") or result.payload.get("document", ""),
                 metadata=result.payload.get("metadata"),
+                id=str(result.id),  # Capture point ID
             )
             for result in search_results.points
         ]
+
+    async def delete(
+        self,
+        filter_condition: models.Filter | None = None,
+        *,
+        point_ids: list[str] | None = None,
+        collection_name: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Delete points from the Qdrant collection by IDs or filter conditions.
+        :param filter_condition: Qdrant filter to identify points to delete (optional)
+        :param point_ids: List of point IDs (UUIDs) to delete (optional)
+        :param collection_name: The name of the collection to delete from, optional. If not provided,
+                                the default collection is used.
+        :return: Dictionary with status and operation_id
+        :raises ValueError: If neither filter_condition nor point_ids is provided, or if both are provided
+        """
+        # Validate that exactly one deletion method is provided
+        if filter_condition is None and point_ids is None:
+            raise ValueError("Either filter_condition or point_ids must be provided")
+        if filter_condition is not None and point_ids is not None:
+            raise ValueError("Cannot provide both filter_condition and point_ids")
+
+        collection_name = collection_name or self._default_collection_name
+        assert collection_name is not None
+
+        collection_exists = await self._client.collection_exists(collection_name)
+        if not collection_exists:
+            logger.warning(f"Collection {collection_name} does not exist, nothing to delete")
+            return {"status": "ok", "deleted_count": 0}
+
+        # Choose deletion method based on parameters
+        if point_ids is not None:
+            # Delete by IDs (recommended - more reliable)
+            points_selector = models.PointIdsList(points=point_ids)
+            logger.info(f"Deleting {len(point_ids)} points by ID from {collection_name}")
+        else:
+            # Delete by filter
+            points_selector = models.FilterSelector(filter=filter_condition)
+            logger.info(f"Deleting points by filter from {collection_name}")
+
+        result = await self._client.delete(
+            collection_name=collection_name,
+            points_selector=points_selector,
+        )
+
+        logger.info(f"Delete operation completed for collection {collection_name}: {result}")
+        return {"status": result.status, "operation_id": result.operation_id}
 
     async def _ensure_collection_exists(self, collection_name: str):
         """
