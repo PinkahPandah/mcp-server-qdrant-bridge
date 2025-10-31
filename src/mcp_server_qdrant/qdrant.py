@@ -62,12 +62,13 @@ class QdrantConnector:
         response = await self._client.get_collections()
         return [collection.name for collection in response.collections]
 
-    async def store(self, entry: Entry, *, collection_name: str | None = None):
+    async def store(self, entry: Entry, *, collection_name: str | None = None) -> str:
         """
         Store some information in the Qdrant collection, along with the specified metadata.
         :param entry: The entry to store in the Qdrant collection.
         :param collection_name: The name of the collection to store the information in, optional. If not provided,
                                 the default collection is used.
+        :return: The point ID (UUID) of the stored entry.
         """
         collection_name = collection_name or self._default_collection_name
         assert collection_name is not None
@@ -81,16 +82,18 @@ class QdrantConnector:
         # Add to Qdrant
         vector_name = self._embedding_provider.get_vector_name()
         payload = {"document": entry.content, METADATA_PATH: entry.metadata}
+        point_id = uuid.uuid4().hex
         await self._client.upsert(
             collection_name=collection_name,
             points=[
                 models.PointStruct(
-                    id=uuid.uuid4().hex,
+                    id=point_id,
                     vector={vector_name: embeddings[0]},
                     payload=payload,
                 )
             ],
         )
+        return point_id
 
     async def retrieve(self, point_id: str, *, collection_name: str | None = None) -> Entry | None:
         """

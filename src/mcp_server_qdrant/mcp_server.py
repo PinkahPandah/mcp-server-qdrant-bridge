@@ -157,10 +157,10 @@ class QdrantMCPServer(FastMCP):
 
             entry = Entry(content=information, metadata=metadata)
 
-            await self.qdrant_connector.store(entry, collection_name=collection_name)
+            point_id = await self.qdrant_connector.store(entry, collection_name=collection_name)
             if collection_name:
-                return f"Remembered: {information} in collection {collection_name}"
-            return f"Remembered: {information}"
+                return f"Remembered: {information} in collection {collection_name} (point_id: {point_id})"
+            return f"Remembered: {information} (point_id: {point_id})"
 
         async def find(
             ctx: Context,
