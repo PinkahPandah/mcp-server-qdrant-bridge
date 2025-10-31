@@ -177,9 +177,9 @@ class QdrantMCPServer(FastMCP):
             mode: Annotated[
                 str,
                 Field(
-                    description="Response mode: 'full' (default) returns complete chunks with metadata for reranking, 'minimal' returns only metadata for rare cases needing just pointer info"
+                    description="Response mode: 'minimal' (default) returns only metadata for token efficiency, 'full' returns complete chunks when you need more context"
                 ),
-            ] = "full",
+            ] = "minimal",
             limit: Annotated[
                 int | None,
                 Field(
@@ -200,7 +200,7 @@ class QdrantMCPServer(FastMCP):
             :param query: The query to use for the search.
             :param collection_name: (DEPRECATED, Optional) The name of the collection to search in. Use collections parameter instead.
             :param collections: (Optional) List of collections to search. Use ['*'] for all collections. If None, uses collection_name or default.
-            :param mode: Response mode - 'full' (default) for complete chunks with reranking, 'minimal' for metadata-only pointer info.
+            :param mode: Response mode - 'minimal' (default) for token-efficient metadata, 'full' for complete chunks when needed.
             :param limit: Maximum number of results to return per collection. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
             :param rerank: Enable reranking (default: True). Set to False to disable reranking and return raw vector search results.
