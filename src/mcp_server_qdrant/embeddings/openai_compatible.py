@@ -8,7 +8,7 @@ class OpenAICompatibleProvider(EmbeddingProvider):
     OpenAI-compatible API implementation of the embedding provider.
     Supports any embedding server with OpenAI-compatible /embeddings endpoint.
 
-    :param base_url: Base URL of the embedding server (e.g., http://192.168.45.12:7997)
+    :param base_url: Base URL of the embedding server (e.g., http://localhost:7997)
     :param api_key: API key for authentication
     :param model_name: Model name to use (e.g., BAAI/bge-large-en-v1.5)
     :param vector_size: Size of the embedding vectors (e.g., 1024 for BGE-large)
