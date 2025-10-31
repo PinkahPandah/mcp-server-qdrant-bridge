@@ -311,9 +311,41 @@ class QdrantMCPServer(FastMCP):
 
             return f"Delete operation completed for {collection_name}: status={result['status']}, operation_id={result.get('operation_id', 'N/A')}"
 
+        async def retrieve(
+            ctx: Context,
+            point_id: Annotated[str, Field(description="The exact point ID (UUID) to retrieve")],
+            collection_name: Annotated[
+                str, Field(description="The collection to retrieve from")
+            ],
+        ) -> str:
+            """
+            Retrieve a point by exact ID from Qdrant.
+            
+            This is faster than semantic search for exact ID lookups (no embedding, no vector computation).
+            
+            :param ctx: The context for the request.
+            :param point_id: The exact point ID (UUID) to retrieve.
+            :param collection_name: The name of the collection to retrieve from.
+            :return: The entry if found, error message otherwise.
+            """
+            await ctx.debug(f"Retrieving point {point_id} from {collection_name}")
+            
+            entry = await self.qdrant_connector.retrieve(
+                point_id=point_id,
+                collection_name=collection_name
+            )
+            
+            if not entry:
+                return f"Point {point_id} not found in collection {collection_name}"
+            
+            # Format same as find tool for consistency
+            metadata_json = json.dumps(entry.metadata, indent=2) if entry.metadata else "{}"
+            return f"<entry><id>{entry.id}</id><content>{entry.content}</content><metadata>{metadata_json}</metadata></entry>"
+
         find_foo = find
         store_foo = store
         delete_foo = delete
+        retrieve_foo = retrieve
 
         filterable_conditions = (
             self.qdrant_settings.filterable_fields_dict_with_conditions()
@@ -336,6 +368,9 @@ class QdrantMCPServer(FastMCP):
             delete_foo = make_partial_function(
                 delete_foo, {"collection_name": self.qdrant_settings.collection_name}
             )
+            retrieve_foo = make_partial_function(
+                retrieve_foo, {"collection_name": self.qdrant_settings.collection_name}
+            )
 
         self.tool(
             find_foo,
@@ -354,4 +389,9 @@ class QdrantMCPServer(FastMCP):
                 delete_foo,
                 name="qdrant-delete",
                 description=self.tool_settings.tool_delete_description,
+            )
+            self.tool(
+                retrieve_foo,
+                name="qdrant-retrieve",
+                description="Retrieve a point by exact ID from Qdrant. Faster than semantic search for known point IDs (no embedding, no vector computation). Use when you have the exact point ID from a previous search or log.",
             )

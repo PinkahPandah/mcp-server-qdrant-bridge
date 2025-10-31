@@ -1,0 +1,32 @@
+    async def retrieve(self, point_id: str, *, collection_name: str | None = None) -> Entry | None:
+        """
+        Retrieve a point by exact ID from the Qdrant collection.
+        :param point_id: The exact point ID (UUID) to retrieve.
+        :param collection_name: The name of the collection to retrieve from, optional. If not provided,
+                                the default collection is used.
+        :return: The entry if found, None otherwise.
+        """
+        collection_name = collection_name or self._default_collection_name
+        assert collection_name is not None
+        
+        try:
+            result = await self._client.retrieve(
+                collection_name=collection_name,
+                ids=[point_id],
+                with_payload=True,
+                with_vectors=False,
+            )
+            
+            if not result:
+                return None
+            
+            point = result[0]
+            return Entry(
+                id=str(point.id),
+                content=point.payload.get("document", ""),
+                metadata=point.payload.get(METADATA_PATH, {}),
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving point {point_id}: {e}")
+            return None
+
