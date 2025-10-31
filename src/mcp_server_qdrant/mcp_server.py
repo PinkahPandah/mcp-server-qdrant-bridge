@@ -190,9 +190,9 @@ class QdrantMCPServer(FastMCP):
             rerank: Annotated[
                 bool,
                 Field(
-                    description="Enable reranking for improved relevance. When true, retrieves more candidates and reranks them. Default: False"
+                    description="Enable reranking for improved relevance and token efficiency. Retrieves more candidates and reranks to return best results. Set to false to disable. Default: True"
                 ),
-            ] = False,
+            ] = True,
         ) -> list[str] | None:
             """
             Find memories in Qdrant.
@@ -203,7 +203,7 @@ class QdrantMCPServer(FastMCP):
             :param mode: Response mode - 'full' for complete chunks, 'minimal' for metadata only.
             :param limit: Maximum number of results to return per collection. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
-            :param rerank: Enable reranking for improved relevance.
+            :param rerank: Enable reranking (default: True). Set to False to disable reranking and return raw vector search results.
             :return: A list of entries found or None.
             
             Note: Either collections, collection_name, or a default collection must be configured.
