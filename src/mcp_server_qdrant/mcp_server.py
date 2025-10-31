@@ -166,8 +166,8 @@ class QdrantMCPServer(FastMCP):
             ctx: Context,
             query: Annotated[str, Field(description="What to search for")],
             collection_name: Annotated[
-                str, Field(description="(DEPRECATED: Use collections parameter) The collection to search in")
-            ],
+                str | None, Field(description="(DEPRECATED: Use collections parameter) The collection to search in")
+            ] = None,
             collections: Annotated[
                 list[str] | None,
                 Field(
@@ -198,14 +198,22 @@ class QdrantMCPServer(FastMCP):
             Find memories in Qdrant.
             :param ctx: The context for the request.
             :param query: The query to use for the search.
-            :param collection_name: (DEPRECATED) The name of the collection to search in. Use collections parameter instead.
-            :param collections: List of collections to search. Use ['*'] for all collections. If None, uses collection_name or default.
+            :param collection_name: (DEPRECATED, Optional) The name of the collection to search in. Use collections parameter instead.
+            :param collections: (Optional) List of collections to search. Use ['*'] for all collections. If None, uses collection_name or default.
             :param mode: Response mode - 'full' for complete chunks, 'minimal' for metadata only.
             :param limit: Maximum number of results to return per collection. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
             :param rerank: Enable reranking for improved relevance.
             :return: A list of entries found or None.
+            
+            Note: Either collections, collection_name, or a default collection must be configured.
             """
+
+            # Validate that we have a way to determine which collection(s) to search
+            if collections is None and collection_name is None and self.qdrant_settings.collection_name is None:
+                raise ValueError(
+                    "Must provide either 'collections' parameter, 'collection_name' parameter, or configure a default collection"
+                )
 
             # Use provided limit or fall back to default
             search_limit = limit if limit is not None else self.qdrant_settings.search_limit
