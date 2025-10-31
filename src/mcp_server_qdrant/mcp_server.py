@@ -166,8 +166,14 @@ class QdrantMCPServer(FastMCP):
             ctx: Context,
             query: Annotated[str, Field(description="What to search for")],
             collection_name: Annotated[
-                str, Field(description="The collection to search in")
+                str, Field(description="(DEPRECATED: Use collections parameter) The collection to search in")
             ],
+            collections: Annotated[
+                list[str] | None,
+                Field(
+                    description="List of collections to search. Use ['*'] to search all collections. If not provided, uses collection_name or default collection."
+                ),
+            ] = None,
             mode: Annotated[
                 str,
                 Field(
@@ -192,11 +198,12 @@ class QdrantMCPServer(FastMCP):
             Find memories in Qdrant.
             :param ctx: The context for the request.
             :param query: The query to use for the search.
-            :param collection_name: The name of the collection to search in, optional. If not provided,
-                                    the default collection is used.
+            :param collection_name: (DEPRECATED) The name of the collection to search in. Use collections parameter instead.
+            :param collections: List of collections to search. Use ['*'] for all collections. If None, uses collection_name or default.
             :param mode: Response mode - 'full' for complete chunks, 'minimal' for metadata only.
-            :param limit: Maximum number of results to return. If not specified, uses default (5).
+            :param limit: Maximum number of results to return per collection. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
+            :param rerank: Enable reranking for improved relevance.
             :return: A list of entries found or None.
             """
 
@@ -210,14 +217,26 @@ class QdrantMCPServer(FastMCP):
 
             query_filter = models.Filter(**query_filter) if query_filter else None
 
-            await ctx.debug(f"Finding results for query {query}")
-
-            entries = await self.qdrant_connector.search(
-                query,
-                collection_name=collection_name,
-                limit=search_limit,
-                query_filter=query_filter,
-            )
+            # Handle backward compatibility: collections parameter vs collection_name
+            if collections is not None:
+                # New multi-collection mode
+                await ctx.debug(f"Multi-collection search: {collections}")
+                entries = await self.qdrant_connector.search_multi(
+                    query,
+                    collections=collections,
+                    limit=search_limit,
+                    query_filter=query_filter,
+                    limit_multiplier=self.qdrant_settings.multi_collection_limit_multiplier,
+                )
+            else:
+                # Legacy single-collection mode
+                await ctx.debug(f"Single-collection search: {collection_name}")
+                entries = await self.qdrant_connector.search(
+                    query,
+                    collection_name=collection_name,
+                    limit=search_limit,
+                    query_filter=query_filter,
+                )
 
             # Reranking logic
             if rerank and self.reranker_client:

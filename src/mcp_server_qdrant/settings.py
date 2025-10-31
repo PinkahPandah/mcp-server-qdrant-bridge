@@ -140,6 +140,11 @@ class QdrantSettings(BaseSettings):
     )
     local_path: str | None = Field(default=None, validation_alias="QDRANT_LOCAL_PATH")
     search_limit: int = Field(default=5, validation_alias="QDRANT_SEARCH_LIMIT")
+    multi_collection_limit_multiplier: int = Field(
+        default=3,
+        validation_alias="QDRANT_MULTI_COLLECTION_LIMIT_MULTIPLIER",
+        description="Multiplier for result limit when searching multiple collections (e.g., 3x means limit*3 total results)"
+    )
     read_only: bool = Field(default=False, validation_alias="QDRANT_READ_ONLY")
 
     filterable_fields: list[FilterableField] | None = Field(default=None)

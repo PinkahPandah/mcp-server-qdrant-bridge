@@ -22,6 +22,7 @@ class Entry(BaseModel):
     content: str
     metadata: Metadata | None = None
     id: str | None = None  # Qdrant point ID (UUID)
+    score: float | None = None  # Similarity score for sorting multi-collection results
 
 
 class QdrantConnector:
@@ -135,6 +136,112 @@ class QdrantConnector:
                 content=result.payload.get("page_content") or result.payload.get("document", ""),
                 metadata=result.payload.get("metadata"),
                 id=str(result.id),  # Capture point ID
+                score=result.score,  # Capture similarity score
+            )
+            for result in search_results.points
+        ]
+
+    async def search_multi(
+        self,
+        query: str,
+        *,
+        collections: list[str] | None = None,
+        limit: int = 10,
+        query_filter: models.Filter | None = None,
+        limit_multiplier: int = 3,
+    ) -> list[Entry]:
+        """
+        Search multiple collections in parallel and merge results.
+
+        :param query: The query to use for the search.
+        :param collections: List of collection names to search, or None for default, or ["*"] for all collections.
+        :param limit: The maximum number of entries to return per collection.
+        :param query_filter: The filter to apply to the query, if any.
+        :param limit_multiplier: Multiplier for total results when searching multiple collections (default 3x).
+        :return: A list of entries found, sorted by score.
+        """
+        # Determine which collections to search
+        if collections is None:
+            collections_to_search = [self._default_collection_name]
+        elif collections == ["*"]:
+            collections_to_search = await self.get_collection_names()
+        else:
+            collections_to_search = collections
+
+        # Embed query once (reuse for all collections)
+        query_vector = await self._embedding_provider.embed_query(query)
+        vector_name = self._embedding_provider.get_vector_name()
+
+        # Search all collections in parallel
+        import asyncio
+
+        search_tasks = [
+            self._search_single_collection(
+                collection, query_vector, vector_name, limit, query_filter
+            )
+            for collection in collections_to_search
+        ]
+
+        results = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+        # Merge results, filter errors, add collection metadata
+        all_entries = []
+        for collection, result in zip(collections_to_search, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Collection {collection} search failed: {result}")
+                continue
+
+            # Add collection name to metadata
+            for entry in result:
+                if entry.metadata is None:
+                    entry.metadata = {}
+                entry.metadata["collection"] = collection
+                all_entries.append(entry)
+
+        # Sort by score (descending)
+        all_entries.sort(key=lambda e: e.score if e.score is not None else 0.0, reverse=True)
+
+        # Return top N (smart limiting for multi-collection)
+        total_limit = limit * min(len(collections_to_search), limit_multiplier) if len(collections_to_search) > 1 else limit
+        return all_entries[:total_limit]
+
+    async def _search_single_collection(
+        self,
+        collection: str,
+        query_vector: list[float],
+        vector_name: str,
+        limit: int,
+        query_filter: models.Filter | None,
+    ) -> list[Entry]:
+        """
+        Helper to search a single collection.
+
+        :param collection: The name of the collection to search.
+        :param query_vector: The pre-embedded query vector.
+        :param vector_name: The name of the vector field.
+        :param limit: The maximum number of entries to return.
+        :param query_filter: The filter to apply to the query, if any.
+        :return: A list of entries found.
+        """
+        if not await self._client.collection_exists(collection):
+            logger.warning(f"Collection {collection} does not exist, skipping")
+            return []
+
+        search_results = await self._client.query_points(
+            collection_name=collection,
+            query=query_vector,
+            using=vector_name,
+            limit=limit,
+            query_filter=query_filter,
+            with_payload=True,
+        )
+
+        return [
+            Entry(
+                content=result.payload.get("page_content") or result.payload.get("document", ""),
+                metadata=result.payload.get("metadata"),
+                id=str(result.id),
+                score=result.score,
             )
             for result in search_results.points
         ]
