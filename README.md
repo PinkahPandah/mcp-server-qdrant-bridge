@@ -18,6 +18,7 @@ This fork includes **90-97% token reduction** for documentation queries through:
 3. **Optional limit parameter** - Override when deeper search needed
 4. **Point IDs in results** - All search results include point IDs for precise deletion operations
 5. **Delete tool** - Remove points by ID or filter for collection maintenance
+6. **Optional reranking** - Retrieve more candidates and rerank with BGE reranker for improved relevance on complex queries
 
 ```python
 # Default: minimal mode, 5 results (~2k tokens)
@@ -34,6 +35,9 @@ qdrant-delete(collection_name="my-collection", point_ids=["uuid-1", "uuid-2"])
 
 # Delete by filter
 qdrant-delete(collection_name="my-collection", query_filter={"must": [{"key": "status", "match": {"value": "expired"}}]})
+
+# Enable reranking for complex queries (requires RERANKER_ENABLED=true)
+qdrant-find(query="explain ZFS replication architecture", mode="full", limit=30, rerank=true)
 ```
 
 See [README.custom.md](README.custom.md) for detailed comparison and configuration.
@@ -63,6 +67,7 @@ It acts as a semantic memory layer on top of the Qdrant database.
                                    If there is a default collection name, this field is not enabled.
      - `mode` (string, optional): Response mode - "minimal" (default, metadata only) or "full" (complete content)
      - `limit` (integer, optional): Maximum number of results to return (default: 5)
+     - `rerank` (boolean, optional): Enable reranking for improved relevance (default: false). When enabled, retrieves more candidates and reranks them using BGE reranker. Requires RERANKER_ENABLED=true.
    - Returns: Information stored in the Qdrant database as separate messages, including point IDs for each result
 3. `qdrant-delete`
    - Delete points from the Qdrant database by IDs or filter conditions
@@ -88,7 +93,13 @@ The configuration of the server is done using environment variables:
 | `EMBEDDING_MODEL`        | Name of the embedding model to use                                  | `sentence-transformers/all-MiniLM-L6-v2`                          |
 | `TOOL_STORE_DESCRIPTION` | Custom description for the store tool                               | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
 | `TOOL_FIND_DESCRIPTION`  | Custom description for the find tool                                | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
-| `TOOL_DELETE_DESCRIPTION` | Custom description for the delete tool                             | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
+| `TOOL_DELETE_DESCRIPTION` | Custom description for the delete tool                             | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
+| `RERANKER_ENABLED` | Enable reranker globally (default: false) | `false` |
+| `RERANKER_URL` | Reranker API endpoint URL | `https://reranker.moderncaveman.us/rerank` |
+| `RERANKER_API_KEY` | Bearer token for reranker API | None |
+| `RERANKER_CANDIDATE_POOL_SIZE` | Number of candidates to retrieve before reranking | `30` |
+| `RERANKER_TOP_K` | Number of top results to return after reranking | `8` |
+| `RERANKER_TIMEOUT` | HTTP timeout in seconds for reranker API | `10` |
 
 Note: You cannot provide both `QDRANT_URL` and `QDRANT_LOCAL_PATH` at the same time.
 
