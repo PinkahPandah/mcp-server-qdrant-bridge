@@ -102,7 +102,7 @@ The configuration of the server is done using environment variables:
 | `TOOL_FIND_DESCRIPTION`  | Custom description for the find tool                                | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
 | `TOOL_DELETE_DESCRIPTION` | Custom description for the delete tool                             | See default in [`settings.py`](src/mcp_server_qdrant/settings.py) |
 | `RERANKER_ENABLED` | Enable reranker globally (default: false) | `false` |
-| `RERANKER_URL` | Reranker API endpoint URL | `https://reranker.moderncaveman.us/rerank` |
+| `RERANKER_URL` | Reranker API endpoint URL | `https://reranker.example.com/rerank` |
 | `RERANKER_API_KEY` | Bearer token for reranker API | None |
 | `RERANKER_CANDIDATE_POOL_SIZE` | Number of candidates to retrieve before reranking | `30` |
 | `RERANKER_TOP_K` | Number of top results to return after reranking | `8` |

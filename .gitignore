@@ -163,3 +163,16 @@ cython_debug/
 
 # Project-specific settings
 .aider*
+
+# Local test scripts (contain PII)
+test_*.py
+
+# Local configuration scripts
+add_hosts.ps1
+*.ps1
+
+# Serena project files
+.serena/
+
+# Design documents (optional)
+*_DESIGN.md

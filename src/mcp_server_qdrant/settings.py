@@ -79,7 +79,7 @@ class RerankerSettings(BaseSettings):
         description="Enable reranker globally (can be overridden per query)"
     )
     url: str = Field(
-        default="https://reranker.moderncaveman.us/rerank",
+        default="https://reranker.example.com/rerank",
         validation_alias="RERANKER_URL",
         description="Reranker API endpoint URL"
     )
