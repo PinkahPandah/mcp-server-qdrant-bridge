@@ -13,12 +13,13 @@ This repository is an example of how to create a MCP server for [Qdrant](https:/
 
 This fork includes **90-97% token reduction** for documentation queries through:
 
-1. **Minimal mode (default)** - Returns metadata only (IPs, hostnames, URLs, file names) without full chunk content
+1. **Minimal mode (default)** - Returns metadata only (IPs, hostnames, URLs, file names) without full chunk content (2.7x cheaper than full mode)
 2. **Reduced default limit** - 5 results instead of 10
 3. **Optional limit parameter** - Override when deeper search needed
 4. **Point IDs in results** - All search results include point IDs for precise deletion operations
 5. **Delete tool** - Remove points by ID or filter for collection maintenance
-6. **Optional reranking** - Retrieve more candidates and rerank with BGE reranker for improved relevance on complex queries
+6. **Optional reranking (enabled by default)** - Retrieve more candidates and rerank with BGE reranker for improved relevance (zero token cost, server-side operation)
+7. **Multi-collection search** - Search multiple collections in parallel or use wildcard to search all collections at once
 
 ```python
 # Default: minimal mode, 5 results (~2k tokens)
@@ -36,8 +37,14 @@ qdrant-delete(collection_name="my-collection", point_ids=["uuid-1", "uuid-2"])
 # Delete by filter
 qdrant-delete(collection_name="my-collection", query_filter={"must": [{"key": "status", "match": {"value": "expired"}}]})
 
-# Enable reranking for complex queries (requires RERANKER_ENABLED=true)
-qdrant-find(query="explain ZFS replication architecture", mode="full", limit=30, rerank=true)
+# Reranking enabled by default (zero token cost)
+qdrant-find(query="server configuration")  # Automatically reranks for best 8 results
+
+# Multi-collection search
+qdrant-find(query="service ports", collections=["homelab-docs", "docker-stacks"])
+
+# Search all collections
+qdrant-find(query="architecture overview", collections=["*"], mode="full", limit=10)
 ```
 
 See [README.custom.md](README.custom.md) for detailed comparison and configuration.
@@ -63,12 +70,12 @@ It acts as a semantic memory layer on top of the Qdrant database.
    - Retrieve relevant information from the Qdrant database
    - Input:
      - `query` (string): Query to use for searching
-     - `collection_name` (string): Name of the collection to store the information in. This field is required if there are no default collection name.
-                                   If there is a default collection name, this field is not enabled.
-     - `mode` (string, optional): Response mode - "minimal" (default, metadata only) or "full" (complete content)
-     - `limit` (integer, optional): Maximum number of results to return (default: 5)
-     - `rerank` (boolean, optional): Enable reranking for improved relevance (default: false). When enabled, retrieves more candidates and reranks them using BGE reranker. Requires RERANKER_ENABLED=true.
-   - Returns: Information stored in the Qdrant database as separate messages, including point IDs for each result
+     - `collection_name` (string, optional, DEPRECATED): Name of the collection to search in. Use `collections` parameter instead.
+     - `collections` (array of strings, optional): List of collections to search. Use `["*"]` to search all collections. If not provided, uses `collection_name` or default collection.
+     - `mode` (string, optional): Response mode - "minimal" (default, metadata only for 2.7x token efficiency) or "full" (complete content)
+     - `limit` (integer, optional): Maximum number of results to return per collection (default: 5)
+     - `rerank` (boolean, optional): Enable reranking for improved relevance (default: true). When enabled, retrieves more candidates and reranks them using BGE reranker (zero token cost, server-side operation).
+   - Returns: Information stored in the Qdrant database as separate messages, including point IDs and source collection for each result
 3. `qdrant-delete`
    - Delete points from the Qdrant database by IDs or filter conditions
    - Input:
