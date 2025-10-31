@@ -12,9 +12,11 @@ from mcp_server_qdrant.common.wrap_filters import wrap_filters
 from mcp_server_qdrant.embeddings.base import EmbeddingProvider
 from mcp_server_qdrant.embeddings.factory import create_embedding_provider
 from mcp_server_qdrant.qdrant import ArbitraryFilter, Entry, Metadata, QdrantConnector
+from mcp_server_qdrant.reranker import RerankerClient
 from mcp_server_qdrant.settings import (
     EmbeddingProviderSettings,
     QdrantSettings,
+    RerankerSettings,
     ToolSettings,
 )
 
@@ -34,6 +36,7 @@ class QdrantMCPServer(FastMCP):
         qdrant_settings: QdrantSettings,
         embedding_provider_settings: Optional[EmbeddingProviderSettings] = None,
         embedding_provider: Optional[EmbeddingProvider] = None,
+        reranker_settings: Optional[RerankerSettings] = None,
         name: str = "mcp-server-qdrant",
         instructions: str | None = None,
         **settings: Any,
@@ -73,6 +76,10 @@ class QdrantMCPServer(FastMCP):
             qdrant_settings.local_path,
             make_indexes(qdrant_settings.filterable_fields_dict()),
         )
+
+        # Initialize reranker client if enabled
+        self.reranker_settings = reranker_settings or RerankerSettings()
+        self.reranker_client = RerankerClient(self.reranker_settings) if self.reranker_settings.enabled else None
 
         super().__init__(name=name, instructions=instructions, **settings)
 
@@ -174,6 +181,12 @@ class QdrantMCPServer(FastMCP):
                 ),
             ] = None,
             query_filter: ArbitraryFilter | None = None,
+            rerank: Annotated[
+                bool,
+                Field(
+                    description="Enable reranking for improved relevance. When true, retrieves more candidates and reranks them. Default: False"
+                ),
+            ] = False,
         ) -> list[str] | None:
             """
             Find memories in Qdrant.
@@ -205,6 +218,20 @@ class QdrantMCPServer(FastMCP):
                 limit=search_limit,
                 query_filter=query_filter,
             )
+
+            # Reranking logic
+            if rerank and self.reranker_client:
+                try:
+                    await ctx.debug(f"Reranking {len(entries)} candidates")
+                    # Use configured top_k or fall back to search_limit
+                    top_k = min(search_limit, self.reranker_settings.top_k)
+                    entries = await self.reranker_client.rerank(query, entries, top_k=top_k)
+                    await ctx.debug(f"Reranked to {len(entries)} results")
+                except Exception as e:
+                    await ctx.debug(f"Reranker failed: {e}, returning unreranked results")
+                    # On reranker failure, return original results (fail gracefully)
+                    logger.warning(f"Reranker failed, using unreranked results: {e}")
+
             if not entries:
                 return None
             content = [

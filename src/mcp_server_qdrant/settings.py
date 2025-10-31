@@ -70,6 +70,41 @@ class EmbeddingProviderSettings(BaseSettings):
     )
 
 
+class RerankerSettings(BaseSettings):
+    """Configuration for optional reranking service."""
+
+    enabled: bool = Field(
+        default=False,
+        validation_alias="RERANKER_ENABLED",
+        description="Enable reranker globally (can be overridden per query)"
+    )
+    url: str = Field(
+        default="https://reranker.moderncaveman.us/rerank",
+        validation_alias="RERANKER_URL",
+        description="Reranker API endpoint URL"
+    )
+    api_key: str | None = Field(
+        default="be2094c3bcfe4215ee286fab7780b0d812612f021dc476e77ee32d1b6483651a",
+        validation_alias="RERANKER_API_KEY",
+        description="Bearer token for reranker API"
+    )
+    candidate_pool_size: int = Field(
+        default=30,
+        validation_alias="RERANKER_CANDIDATE_POOL_SIZE",
+        description="Number of candidates to retrieve before reranking"
+    )
+    top_k: int = Field(
+        default=8,
+        validation_alias="RERANKER_TOP_K",
+        description="Number of top results to return after reranking"
+    )
+    timeout: int = Field(
+        default=10,
+        validation_alias="RERANKER_TIMEOUT",
+        description="HTTP timeout in seconds"
+    )
+
+
 class FilterableField(BaseModel):
     name: str = Field(description="The name of the field payload field to filter on")
     description: str = Field(
