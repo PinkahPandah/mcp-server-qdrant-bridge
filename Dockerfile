@@ -5,8 +5,11 @@ WORKDIR /app
 # Install uv for package management
 RUN pip install --no-cache-dir uv
 
-# Install the mcp-server-qdrant package
-RUN uv pip install --system --no-cache-dir mcp-server-qdrant
+# Copy local source code
+COPY . /app
+
+# Install from local source (not PyPI)
+RUN uv pip install --system --no-cache-dir .
 
 # Expose the default port for SSE transport (not used for STDIO but kept for compatibility)
 EXPOSE 8000
