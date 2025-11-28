@@ -1,5 +1,6 @@
 import logging
 import httpx
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp_server_qdrant.qdrant import Entry
@@ -59,7 +60,7 @@ class RerankerClient:
             # Map reranked results back to original entries
             # API returns: {results: [{index: N, relevance_score: X}, ...]}
             reranked_entries = []
-            for item in data["results"][:top_k]:  # Force limit to top_k
+            for item in data["results"]:  # Process all results, will re-sort and trim
                 index = item.get("index")
                 score = item.get("relevance_score") or item.get("score")
 
@@ -71,12 +72,22 @@ class RerankerClient:
                 entry = entries[index]
                 if entry.metadata is None:
                     entry.metadata = {}
-                entry.metadata["rerank_score"] = score
+
+                # Apply TTL decay for expired working memories
+                adjusted_score = self._apply_ttl_decay(entry, score)
+
+                entry.metadata["rerank_score"] = adjusted_score
                 entry.metadata["reranked"] = True
 
                 reranked_entries.append(entry)
 
-            logger.info(f"Reranked {len(entries)} → {len(reranked_entries)} results")
+            # Re-sort by adjusted score (TTL decay may have changed order)
+            reranked_entries.sort(key=lambda e: e.metadata.get("rerank_score", 0), reverse=True)
+
+            # Trim to top_k after re-sorting
+            reranked_entries = reranked_entries[:top_k]
+
+            logger.info(f"Reranked {len(entries)} → {len(reranked_entries)} results (with TTL decay)")
             return reranked_entries
 
         except httpx.HTTPError as e:
@@ -85,6 +96,45 @@ class RerankerClient:
         except Exception as e:
             logger.error(f"Reranker error: {e}")
             raise RuntimeError(f"Reranker failed: {e}")
+
+    def _apply_ttl_decay(self, entry: Entry, score: float) -> float:
+        """
+        Apply decay multiplier to scores for expired or near-expired working memory.
+
+        Long-term memories and unclassified entries pass through unchanged.
+        Working memories get decayed based on TTL expiration status.
+        """
+        metadata = entry.metadata or {}
+        memory_type = metadata.get("memory_type")
+        ttl_days = metadata.get("ttl_days")
+        timestamp = metadata.get("timestamp")
+
+        # Only decay working memory with valid TTL info
+        if memory_type != "working" or not ttl_days or not timestamp:
+            return score
+
+        try:
+            # Parse timestamp (handle ISO format with Z or +00:00)
+            ts = timestamp.replace("Z", "+00:00") if isinstance(timestamp, str) else str(timestamp)
+            created = datetime.fromisoformat(ts)
+            age_days = (datetime.now(timezone.utc) - created).days
+
+            if age_days > ttl_days:
+                # Expired - heavy decay
+                decay = 0.3
+                logger.debug(f"TTL expired ({age_days}d > {ttl_days}d): score {score:.3f} → {score * decay:.3f}")
+                return score * decay
+            elif age_days > ttl_days * 0.8:
+                # Near expiry (>80% of TTL) - mild decay
+                decay = 0.7
+                logger.debug(f"TTL near expiry ({age_days}d / {ttl_days}d): score {score:.3f} → {score * decay:.3f}")
+                return score * decay
+
+            return score
+
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to parse TTL metadata: {e}")
+            return score
 
     async def close(self):
         """Close HTTP client."""
