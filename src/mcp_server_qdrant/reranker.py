@@ -1,7 +1,7 @@
 import logging
-import httpx
 from datetime import datetime, timezone
-from typing import Any
+
+import httpx
 
 from mcp_server_qdrant.qdrant import Entry
 from mcp_server_qdrant.settings import RerankerSettings
@@ -16,7 +16,9 @@ class RerankerClient:
         self.settings = settings
         self.client = httpx.AsyncClient(timeout=settings.timeout)
 
-    async def rerank(self, query: str, entries: list[Entry], top_k: int | None = None) -> list[Entry]:
+    async def rerank(
+        self, query: str, entries: list[Entry], top_k: int | None = None
+    ) -> list[Entry]:
         """
         Rerank entries by relevance to query.
 
@@ -42,19 +44,19 @@ class RerankerClient:
 
             response = await self.client.post(
                 self.settings.url,
-                json={
-                    "query": query,
-                    "documents": documents,
-                    "top_k": top_k
-                },
-                headers=headers
+                json={"query": query, "documents": documents, "top_k": top_k},
+                headers=headers,
             )
 
             response.raise_for_status()
             data = response.json()
 
             # Validate response structure
-            if not data or "results" not in data or not isinstance(data["results"], list):
+            if (
+                not data
+                or "results" not in data
+                or not isinstance(data["results"], list)
+            ):
                 raise ValueError(f"Invalid reranker response structure: {data}")
 
             # Map reranked results back to original entries
@@ -82,12 +84,16 @@ class RerankerClient:
                 reranked_entries.append(entry)
 
             # Re-sort by adjusted score (TTL decay may have changed order)
-            reranked_entries.sort(key=lambda e: e.metadata.get("rerank_score", 0), reverse=True)
+            reranked_entries.sort(
+                key=lambda e: e.metadata.get("rerank_score", 0), reverse=True
+            )
 
             # Trim to top_k after re-sorting
             reranked_entries = reranked_entries[:top_k]
 
-            logger.info(f"Reranked {len(entries)} → {len(reranked_entries)} results (with TTL decay)")
+            logger.info(
+                f"Reranked {len(entries)} → {len(reranked_entries)} results (with TTL decay)"
+            )
             return reranked_entries
 
         except httpx.HTTPError as e:
@@ -115,19 +121,27 @@ class RerankerClient:
 
         try:
             # Parse timestamp (handle ISO format with Z or +00:00)
-            ts = timestamp.replace("Z", "+00:00") if isinstance(timestamp, str) else str(timestamp)
+            ts = (
+                timestamp.replace("Z", "+00:00")
+                if isinstance(timestamp, str)
+                else str(timestamp)
+            )
             created = datetime.fromisoformat(ts)
             age_days = (datetime.now(timezone.utc) - created).days
 
             if age_days > ttl_days:
                 # Expired - heavy decay
                 decay = 0.3
-                logger.debug(f"TTL expired ({age_days}d > {ttl_days}d): score {score:.3f} → {score * decay:.3f}")
+                logger.debug(
+                    f"TTL expired ({age_days}d > {ttl_days}d): score {score:.3f} → {score * decay:.3f}"
+                )
                 return score * decay
             elif age_days > ttl_days * 0.8:
                 # Near expiry (>80% of TTL) - mild decay
                 decay = 0.7
-                logger.debug(f"TTL near expiry ({age_days}d / {ttl_days}d): score {score:.3f} → {score * decay:.3f}")
+                logger.debug(
+                    f"TTL near expiry ({age_days}d / {ttl_days}d): score {score:.3f} → {score * decay:.3f}"
+                )
                 return score * decay
 
             return score

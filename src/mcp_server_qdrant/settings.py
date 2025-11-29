@@ -42,6 +42,7 @@ class ToolSettings(BaseSettings):
         validation_alias="TOOL_DELETE_DESCRIPTION",
     )
 
+
 class EmbeddingProviderSettings(BaseSettings):
     """
     Configuration for the embedding provider.
@@ -76,32 +77,32 @@ class RerankerSettings(BaseSettings):
     enabled: bool = Field(
         default=False,
         validation_alias="RERANKER_ENABLED",
-        description="Enable reranker globally (can be overridden per query)"
+        description="Enable reranker globally (can be overridden per query)",
     )
     url: str = Field(
         default="https://reranker.example.com/rerank",
         validation_alias="RERANKER_URL",
-        description="Reranker API endpoint URL"
+        description="Reranker API endpoint URL",
     )
     api_key: str | None = Field(
         default="be2094c3bcfe4215ee286fab7780b0d812612f021dc476e77ee32d1b6483651a",
         validation_alias="RERANKER_API_KEY",
-        description="Bearer token for reranker API"
+        description="Bearer token for reranker API",
     )
     candidate_pool_size: int = Field(
         default=30,
         validation_alias="RERANKER_CANDIDATE_POOL_SIZE",
-        description="Number of candidates to retrieve before reranking"
+        description="Number of candidates to retrieve before reranking",
     )
     top_k: int = Field(
         default=8,
         validation_alias="RERANKER_TOP_K",
-        description="Number of top results to return after reranking"
+        description="Number of top results to return after reranking",
     )
     timeout: int = Field(
         default=10,
         validation_alias="RERANKER_TIMEOUT",
-        description="HTTP timeout in seconds"
+        description="HTTP timeout in seconds",
     )
 
 
@@ -143,7 +144,7 @@ class QdrantSettings(BaseSettings):
     multi_collection_limit_multiplier: int = Field(
         default=3,
         validation_alias="QDRANT_MULTI_COLLECTION_LIMIT_MULTIPLIER",
-        description="Multiplier for result limit when searching multiple collections (e.g., 3x means limit*3 total results)"
+        description="Multiplier for result limit when searching multiple collections (e.g., 3x means limit*3 total results)",
     )
     read_only: bool = Field(default=False, validation_alias="QDRANT_READ_ONLY")
 

@@ -95,7 +95,9 @@ class QdrantConnector:
         )
         return point_id
 
-    async def retrieve(self, point_id: str, *, collection_name: str | None = None) -> Entry | None:
+    async def retrieve(
+        self, point_id: str, *, collection_name: str | None = None
+    ) -> Entry | None:
         """
         Retrieve a point by exact ID from the Qdrant collection.
         :param point_id: The exact point ID (UUID) to retrieve.
@@ -126,7 +128,6 @@ class QdrantConnector:
         except Exception as e:
             logger.error(f"Error retrieving point {point_id}: {e}")
             return None
-
 
     async def search(
         self,
@@ -169,7 +170,8 @@ class QdrantConnector:
 
         return [
             Entry(
-                content=result.payload.get("page_content") or result.payload.get("document", ""),
+                content=result.payload.get("page_content")
+                or result.payload.get("document", ""),
                 metadata=result.payload.get("metadata"),
                 id=str(result.id),  # Capture point ID
                 score=result.score,  # Capture similarity score
@@ -197,7 +199,10 @@ class QdrantConnector:
         :return: A list of entries found, sorted by score.
         """
         # Determine which collections to search
+        collections_to_search: list[str]
         if collections is None:
+            if self._default_collection_name is None:
+                return []
             collections_to_search = [self._default_collection_name]
         elif collections == ["*"]:
             collections_to_search = await self.get_collection_names()
@@ -221,24 +226,31 @@ class QdrantConnector:
         results = await asyncio.gather(*search_tasks, return_exceptions=True)
 
         # Merge results, filter errors, add collection metadata
-        all_entries = []
+        all_entries: list[Entry] = []
         for collection, result in zip(collections_to_search, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(f"Collection {collection} search failed: {result}")
                 continue
 
             # Add collection name to metadata
-            for entry in result:
+            entries: list[Entry] = result
+            for entry in entries:
                 if entry.metadata is None:
                     entry.metadata = {}
                 entry.metadata["collection"] = collection
                 all_entries.append(entry)
 
         # Sort by score (descending)
-        all_entries.sort(key=lambda e: e.score if e.score is not None else 0.0, reverse=True)
+        all_entries.sort(
+            key=lambda e: e.score if e.score is not None else 0.0, reverse=True
+        )
 
         # Return top N (smart limiting for multi-collection)
-        total_limit = limit * min(len(collections_to_search), limit_multiplier) if len(collections_to_search) > 1 else limit
+        total_limit = (
+            limit * min(len(collections_to_search), limit_multiplier)
+            if len(collections_to_search) > 1
+            else limit
+        )
         return all_entries[:total_limit]
 
     async def _search_single_collection(
@@ -274,7 +286,8 @@ class QdrantConnector:
 
         return [
             Entry(
-                content=result.payload.get("page_content") or result.payload.get("document", ""),
+                content=result.payload.get("page_content")
+                or result.payload.get("document", ""),
                 metadata=result.payload.get("metadata"),
                 id=str(result.id),
                 score=result.score,
@@ -309,14 +322,18 @@ class QdrantConnector:
 
         collection_exists = await self._client.collection_exists(collection_name)
         if not collection_exists:
-            logger.warning(f"Collection {collection_name} does not exist, nothing to delete")
+            logger.warning(
+                f"Collection {collection_name} does not exist, nothing to delete"
+            )
             return {"status": "ok", "deleted_count": 0}
 
         # Choose deletion method based on parameters
         if point_ids is not None:
             # Delete by IDs (recommended - more reliable)
             points_selector = models.PointIdsList(points=point_ids)
-            logger.info(f"Deleting {len(point_ids)} points by ID from {collection_name}")
+            logger.info(
+                f"Deleting {len(point_ids)} points by ID from {collection_name}"
+            )
         else:
             # Delete by filter
             points_selector = models.FilterSelector(filter=filter_condition)
@@ -327,7 +344,9 @@ class QdrantConnector:
             points_selector=points_selector,
         )
 
-        logger.info(f"Delete operation completed for collection {collection_name}: {result}")
+        logger.info(
+            f"Delete operation completed for collection {collection_name}: {result}"
+        )
         return {"status": result.status, "operation_id": result.operation_id}
 
     async def _ensure_collection_exists(self, collection_name: str):

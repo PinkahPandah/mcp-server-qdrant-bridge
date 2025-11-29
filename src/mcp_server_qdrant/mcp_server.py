@@ -79,7 +79,11 @@ class QdrantMCPServer(FastMCP):
 
         # Initialize reranker client if enabled
         self.reranker_settings = reranker_settings or RerankerSettings()
-        self.reranker_client = RerankerClient(self.reranker_settings) if self.reranker_settings.enabled else None
+        self.reranker_client = (
+            RerankerClient(self.reranker_settings)
+            if self.reranker_settings.enabled
+            else None
+        )
 
         super().__init__(name=name, instructions=instructions, **settings)
 
@@ -99,7 +103,7 @@ class QdrantMCPServer(FastMCP):
         Extracts commonly queried factual fields for direct lookup queries.
         """
         entry_id = entry.id if entry.id else "unknown"
-        
+
         if not entry.metadata:
             return f"<entry><id>{entry_id}</id><metadata>No metadata available</metadata></entry>"
 
@@ -157,7 +161,9 @@ class QdrantMCPServer(FastMCP):
 
             entry = Entry(content=information, metadata=metadata)
 
-            point_id = await self.qdrant_connector.store(entry, collection_name=collection_name)
+            point_id = await self.qdrant_connector.store(
+                entry, collection_name=collection_name
+            )
             if collection_name:
                 return f"Remembered: {information} in collection {collection_name} (point_id: {point_id})"
             return f"Remembered: {information} (point_id: {point_id})"
@@ -166,7 +172,10 @@ class QdrantMCPServer(FastMCP):
             ctx: Context,
             query: Annotated[str, Field(description="What to search for")],
             collection_name: Annotated[
-                str | None, Field(description="(DEPRECATED: Use collections parameter) The collection to search in")
+                str | None,
+                Field(
+                    description="(DEPRECATED: Use collections parameter) The collection to search in"
+                ),
             ] = None,
             collections: Annotated[
                 list[str] | None,
@@ -205,18 +214,24 @@ class QdrantMCPServer(FastMCP):
             :param query_filter: The filter to apply to the query.
             :param rerank: Enable reranking (default: True). Set to False to disable reranking and return raw vector search results.
             :return: A list of entries found or None.
-            
+
             Note: Either collections, collection_name, or a default collection must be configured.
             """
 
             # Validate that we have a way to determine which collection(s) to search
-            if collections is None and collection_name is None and self.qdrant_settings.collection_name is None:
+            if (
+                collections is None
+                and collection_name is None
+                and self.qdrant_settings.collection_name is None
+            ):
                 raise ValueError(
                     "Must provide either 'collections' parameter, 'collection_name' parameter, or configure a default collection"
                 )
 
             # Use provided limit or fall back to default
-            search_limit = limit if limit is not None else self.qdrant_settings.search_limit
+            search_limit = (
+                limit if limit is not None else self.qdrant_settings.search_limit
+            )
 
             # Log query_filter, mode, and limit
             await ctx.debug(f"Query filter: {query_filter}")
@@ -252,10 +267,14 @@ class QdrantMCPServer(FastMCP):
                     await ctx.debug(f"Reranking {len(entries)} candidates")
                     # Use configured top_k or fall back to search_limit
                     top_k = min(search_limit, self.reranker_settings.top_k)
-                    entries = await self.reranker_client.rerank(query, entries, top_k=top_k)
+                    entries = await self.reranker_client.rerank(
+                        query, entries, top_k=top_k
+                    )
                     await ctx.debug(f"Reranked to {len(entries)} results")
                 except Exception as e:
-                    await ctx.debug(f"Reranker failed: {e}, returning unreranked results")
+                    await ctx.debug(
+                        f"Reranker failed: {e}, returning unreranked results"
+                    )
                     # On reranker failure, return original results (fail gracefully)
                     logger.warning(f"Reranker failed, using unreranked results: {e}")
 
@@ -279,14 +298,16 @@ class QdrantMCPServer(FastMCP):
             query_filter: ArbitraryFilter | None = None,
             point_ids: Annotated[
                 list[str] | None,
-                Field(description="List of point IDs (UUIDs) to delete. Preferred method for reliable deletion.")
+                Field(
+                    description="List of point IDs (UUIDs) to delete. Preferred method for reliable deletion."
+                ),
             ] = None,
         ) -> str:
             """
             Delete points from Qdrant by IDs or metadata filters.
-            
+
             ID-based deletion is preferred as it's more reliable. Provide either point_ids OR query_filter, not both.
-            
+
             :param ctx: The context for the request.
             :param collection_name: The name of the collection to delete from.
             :param query_filter: Filter conditions to identify points to delete (optional).
@@ -294,17 +315,17 @@ class QdrantMCPServer(FastMCP):
             :return: Confirmation message with operation details.
             """
             if point_ids is not None:
-                await ctx.debug(f"Deleting {len(point_ids)} points by ID: {point_ids[:3]}{'...' if len(point_ids) > 3 else ''}")
+                await ctx.debug(
+                    f"Deleting {len(point_ids)} points by ID: {point_ids[:3]}{'...' if len(point_ids) > 3 else ''}"
+                )
                 result = await self.qdrant_connector.delete(
-                    point_ids=point_ids,
-                    collection_name=collection_name
+                    point_ids=point_ids, collection_name=collection_name
                 )
             elif query_filter is not None:
                 await ctx.debug(f"Deleting points with filter: {query_filter}")
                 filter_obj = models.Filter(**query_filter)
                 result = await self.qdrant_connector.delete(
-                    filter_obj,
-                    collection_name=collection_name
+                    filter_obj, collection_name=collection_name
                 )
             else:
                 raise ValueError("Must provide either point_ids or query_filter")
@@ -313,33 +334,36 @@ class QdrantMCPServer(FastMCP):
 
         async def retrieve(
             ctx: Context,
-            point_id: Annotated[str, Field(description="The exact point ID (UUID) to retrieve")],
+            point_id: Annotated[
+                str, Field(description="The exact point ID (UUID) to retrieve")
+            ],
             collection_name: Annotated[
                 str, Field(description="The collection to retrieve from")
             ],
         ) -> str:
             """
             Retrieve a point by exact ID from Qdrant.
-            
+
             This is faster than semantic search for exact ID lookups (no embedding, no vector computation).
-            
+
             :param ctx: The context for the request.
             :param point_id: The exact point ID (UUID) to retrieve.
             :param collection_name: The name of the collection to retrieve from.
             :return: The entry if found, error message otherwise.
             """
             await ctx.debug(f"Retrieving point {point_id} from {collection_name}")
-            
+
             entry = await self.qdrant_connector.retrieve(
-                point_id=point_id,
-                collection_name=collection_name
+                point_id=point_id, collection_name=collection_name
             )
-            
+
             if not entry:
                 return f"Point {point_id} not found in collection {collection_name}"
-            
+
             # Format same as find tool for consistency
-            metadata_json = json.dumps(entry.metadata, indent=2) if entry.metadata else "{}"
+            metadata_json = (
+                json.dumps(entry.metadata, indent=2) if entry.metadata else "{}"
+            )
             return f"<entry><id>{entry.id}</id><content>{entry.content}</content><metadata>{metadata_json}</metadata></entry>"
 
         find_foo = find
