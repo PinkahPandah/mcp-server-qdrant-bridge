@@ -202,7 +202,7 @@ class QdrantMCPServer(FastMCP):
                     description="Enable reranking for improved relevance and token efficiency. Retrieves more candidates and reranks to return best results. Set to false to disable. Default: True"
                 ),
             ] = True,
-        ) -> list[str] | None:
+        ) -> str | None:
             """
             Find memories in Qdrant.
             :param ctx: The context for the request.
@@ -288,7 +288,7 @@ class QdrantMCPServer(FastMCP):
                     content.append(self.format_entry_minimal(entry))
                 else:
                     content.append(self.format_entry(entry))
-            return content
+            return "\n".join(content)
 
         async def delete(
             ctx: Context,
