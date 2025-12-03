@@ -11,6 +11,43 @@ COPY . /app
 # Install from local source (not PyPI)
 RUN uv pip install --system --no-cache-dir .
 
+# Apply FastMCP fix for Annotated[str, ...] JSON parsing bug
+# FastMCP incorrectly parses str params as JSON when FASTMCP_TOOL_ATTEMPT_PARSE_JSON_ARGS=true
+# because it checks `annotation in (str,)` but pydantic uses Annotated[str, Field(...)]
+RUN FASTMCP_TOOL_FILE=$(python -c "import fastmcp.tools.tool as t; print(t.__file__)") && \
+    sed -i 's/from typing import TYPE_CHECKING, Any/from typing import TYPE_CHECKING, Any, Annotated, get_origin, get_args/' "$FASTMCP_TOOL_FILE" && \
+    python << 'EOF'
+import sys
+fastmcp_path = sys.argv[1] if len(sys.argv) > 1 else None
+if not fastmcp_path:
+    import fastmcp.tools.tool as t
+    fastmcp_path = t.__file__
+with open(fastmcp_path, 'r') as f:
+    content = f.read()
+old = '''                # skip if the type is a simple type (int, float, bool)
+                if signature.parameters[param_name].annotation in (
+                    int,
+                    float,
+                    bool,
+                ):
+                    continue'''
+new = '''                # skip if the type is a simple type (int, float, bool, str)
+                # Also handle Annotated[str, ...] by unwrapping
+                annotation = signature.parameters[param_name].annotation
+                base_type = annotation
+                if get_origin(annotation) is Annotated:
+                    base_type = get_args(annotation)[0]
+                if base_type in (int, float, bool, str):
+                    continue'''
+if old in content:
+    content = content.replace(old, new)
+    with open(fastmcp_path, 'w') as f:
+        f.write(content)
+    print("FastMCP str fix applied")
+else:
+    print("FastMCP already patched or structure changed")
+EOF
+
 # Expose the default port for SSE transport (not used for STDIO but kept for compatibility)
 EXPOSE 8000
 
