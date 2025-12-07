@@ -188,7 +188,7 @@ class QdrantMCPServer(FastMCP):
                 Field(
                     description="Response mode: 'minimal' (default) returns only metadata for token efficiency, 'full' returns complete chunks when you need more context"
                 ),
-            ] = "minimal",
+            ] = "full",
             limit: Annotated[
                 int | None,
                 Field(
