@@ -91,41 +91,38 @@ class QdrantMCPServer(FastMCP):
 
     def format_entry(self, entry: Entry) -> str:
         """
+        Return full entry with content and metadata in readable format.
         Feel free to override this method in your subclass to customize the format of the entry.
         """
         entry_id = entry.id if entry.id else "unknown"
         
-        # Build formatted output
         output = []
-        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        output.append("---")
         output.append(f"ID: {entry_id}")
         
-        # Add score if available
         if entry.score is not None:
-            output.append(f"Relevanz-Score: {entry.score:.4f}")
+            output.append(f"Score: {entry.score:.4f}")
         
-        # Add metadata in a readable format
         if entry.metadata:
-            output.append("\nMetadaten:")
-            for key, value in entry.metadata.items():
-                output.append(f"  • {key}: {value}")
+            key_fields = ["file_name", "source", "doc_type", "chunk_id"]
+            for field in key_fields:
+                if field in entry.metadata and entry.metadata[field]:
+                    output.append(f"{field}: {entry.metadata[field]}")
         
-        # Add content
-        output.append("\nInhalt:")
+        output.append("")
         output.append(entry.content)
-        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        output.append("---")
         
         return "\n".join(output)
 
     def format_entry_minimal(self, entry: Entry) -> str:
         """
-        Return only metadata without chunk content for token-efficient responses.
-        Extracts commonly queried factual fields for direct lookup queries.
+        Return only key metadata without chunk content for token-efficient responses.
         """
         entry_id = entry.id if entry.id else "unknown"
 
         if not entry.metadata:
-            return f"<entry><id>{entry_id}</id><metadata>No metadata available</metadata></entry>"
+            return f"📄 ID: {entry_id} | ⚠️ Keine Metadaten verfügbar"
 
         # Extract commonly queried factual fields
         factual_fields = {
@@ -144,8 +141,11 @@ class QdrantMCPServer(FastMCP):
         # Filter out None values
         factual_fields = {k: v for k, v in factual_fields.items() if v}
 
-        metadata_json = json.dumps(factual_fields, indent=2)
-        return f"<entry><id>{entry_id}</id><metadata>{metadata_json}</metadata></entry>"
+        if not factual_fields:
+            return f"📄 ID: {entry_id} | ⚠️ Keine relevanten Metadaten"
+        
+        metadata_str = " | ".join([f"{k}: {v}" for k, v in factual_fields.items()])
+        return f"📄 ID: {entry_id} | {metadata_str}"
 
     def setup_tools(self):
         """
@@ -206,9 +206,9 @@ class QdrantMCPServer(FastMCP):
             mode: Annotated[
                 str,
                 Field(
-                    description="Response mode: 'minimal' (default) returns only metadata for token efficiency, 'full' returns complete chunks when you need more context"
+                    description="Response mode: 'minimal' returns only metadata for token efficiency, 'full' (default) returns complete chunks when you need more context"
                 ),
-            ] = "minimal",
+            ] = "full",
             limit: Annotated[
                 int | None,
                 Field(
@@ -229,7 +229,7 @@ class QdrantMCPServer(FastMCP):
             :param query: The query to use for the search.
             :param collection_name: (DEPRECATED, Optional) The name of the collection to search in. Use collections parameter instead.
             :param collections: (Optional) List of collections to search. Use ['*'] for all collections. If None, uses collection_name or default.
-            :param mode: Response mode - 'minimal' (default) for token-efficient metadata, 'full' for complete chunks when needed.
+            :param mode: Response mode - 'minimal' for token-efficient metadata, 'full' (default) for complete chunks when needed.
             :param limit: Maximum number of results to return per collection. If not specified, uses default (5).
             :param query_filter: The filter to apply to the query.
             :param rerank: Enable reranking (default: True). Set to False to disable reranking and return raw vector search results.
