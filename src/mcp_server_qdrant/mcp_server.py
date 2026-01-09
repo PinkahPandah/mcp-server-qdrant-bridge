@@ -93,9 +93,29 @@ class QdrantMCPServer(FastMCP):
         """
         Feel free to override this method in your subclass to customize the format of the entry.
         """
-        entry_metadata = json.dumps(entry.metadata) if entry.metadata else ""
         entry_id = entry.id if entry.id else "unknown"
-        return f"<entry><id>{entry_id}</id><content>{entry.content}</content><metadata>{entry_metadata}</metadata></entry>"
+        
+        # Build formatted output
+        output = []
+        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        output.append(f"ID: {entry_id}")
+        
+        # Add score if available
+        if entry.score is not None:
+            output.append(f"Relevanz-Score: {entry.score:.4f}")
+        
+        # Add metadata in a readable format
+        if entry.metadata:
+            output.append("\nMetadaten:")
+            for key, value in entry.metadata.items():
+                output.append(f"  • {key}: {value}")
+        
+        # Add content
+        output.append("\nInhalt:")
+        output.append(entry.content)
+        output.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        
+        return "\n".join(output)
 
     def format_entry_minimal(self, entry: Entry) -> str:
         """
