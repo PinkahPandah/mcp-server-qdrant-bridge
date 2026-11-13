@@ -62,6 +62,42 @@ class QdrantConnector:
         response = await self._client.get_collections()
         return [collection.name for collection in response.collections]
 
+    async def _resolve_vector_name(self, collection_name: str) -> str | None:
+        """
+        Read the dense-vector name from the collection instead of guessing it from
+        the embedding model. Collections created by other tools may use a different
+        name (e.g. "dense") or an unnamed vector; None means "unnamed", in which
+        case no `using` argument may be sent.
+        """
+        provider_name = self._embedding_provider.get_vector_name()
+        try:
+            info = await self._client.get_collection(collection_name)
+        except Exception as exc:  # collection missing or API error
+            logger.warning(
+                f"Could not read vector config of {collection_name} ({exc}); "
+                f"falling back to {provider_name}"
+            )
+            return provider_name
+
+        vectors = getattr(info.config.params, "vectors", None)
+        if isinstance(vectors, dict) and vectors:
+            if provider_name in vectors:
+                return provider_name
+            if len(vectors) == 1:
+                name = next(iter(vectors))
+                logger.info(
+                    f"Collection {collection_name} uses vector '{name}' "
+                    f"instead of '{provider_name}' - adapting"
+                )
+                return name
+            fallback = sorted(vectors)[0]
+            logger.warning(
+                f"Collection {collection_name} has {len(vectors)} named vectors "
+                f"and none is '{provider_name}' - using '{fallback}'"
+            )
+            return fallback
+        return None
+
     async def store(self, entry: Entry, *, collection_name: str | None = None) -> str:
         """
         Store some information in the Qdrant collection, along with the specified metadata.
@@ -80,7 +116,8 @@ class QdrantConnector:
         embeddings = await self._embedding_provider.embed_documents([entry.content])
 
         # Add to Qdrant
-        vector_name = self._embedding_provider.get_vector_name()
+        vector_name = await self._resolve_vector_name(collection_name)
+        vector = {vector_name: embeddings[0]} if vector_name else embeddings[0]
         payload = {"document": entry.content, METADATA_PATH: entry.metadata}
         point_id = uuid.uuid4().hex
         await self._client.upsert(
@@ -88,7 +125,7 @@ class QdrantConnector:
             points=[
                 models.PointStruct(
                     id=point_id,
-                    vector={vector_name: embeddings[0]},
+                    vector=vector,
                     payload=payload,
                 )
             ],
@@ -163,16 +200,18 @@ class QdrantConnector:
         # it should unlock usage of server-side inference.
 
         query_vector = await self._embedding_provider.embed_query(query)
-        vector_name = self._embedding_provider.get_vector_name()
+        vector_name = await self._resolve_vector_name(collection_name)
 
         # Search in Qdrant
-        search_results = await self._client.query_points(
-            collection_name=collection_name,
-            query=query_vector,
-            using=vector_name,
-            limit=limit,
-            query_filter=query_filter,
-        )
+        search_kwargs: dict[str, Any] = {
+            "collection_name": collection_name,
+            "query": query_vector,
+            "limit": limit,
+            "query_filter": query_filter,
+        }
+        if vector_name:
+            search_kwargs["using"] = vector_name
+        search_results = await self._client.query_points(**search_kwargs)
 
         return [
             Entry(
@@ -217,14 +256,14 @@ class QdrantConnector:
 
         # Embed query once (reuse for all collections)
         query_vector = await self._embedding_provider.embed_query(query)
-        vector_name = self._embedding_provider.get_vector_name()
 
-        # Search all collections in parallel
+        # Search all collections in parallel; the vector name is resolved per
+        # collection, because they may differ (see _resolve_vector_name).
         import asyncio
 
         search_tasks = [
             self._search_single_collection(
-                collection, query_vector, vector_name, limit, query_filter
+                collection, query_vector, limit, query_filter
             )
             for collection in collections_to_search
         ]
@@ -263,7 +302,6 @@ class QdrantConnector:
         self,
         collection: str,
         query_vector: list[float],
-        vector_name: str,
         limit: int,
         query_filter: models.Filter | None,
     ) -> list[Entry]:
@@ -272,7 +310,6 @@ class QdrantConnector:
 
         :param collection: The name of the collection to search.
         :param query_vector: The pre-embedded query vector.
-        :param vector_name: The name of the vector field.
         :param limit: The maximum number of entries to return.
         :param query_filter: The filter to apply to the query, if any.
         :return: A list of entries found.
@@ -281,14 +318,17 @@ class QdrantConnector:
             logger.warning(f"Collection {collection} does not exist, skipping")
             return []
 
-        search_results = await self._client.query_points(
-            collection_name=collection,
-            query=query_vector,
-            using=vector_name,
-            limit=limit,
-            query_filter=query_filter,
-            with_payload=True,
-        )
+        vector_name = await self._resolve_vector_name(collection)
+        search_kwargs: dict[str, Any] = {
+            "collection_name": collection,
+            "query": query_vector,
+            "limit": limit,
+            "query_filter": query_filter,
+            "with_payload": True,
+        }
+        if vector_name:
+            search_kwargs["using"] = vector_name
+        search_results = await self._client.query_points(**search_kwargs)
 
         return [
             Entry(
